@@ -1,4 +1,4 @@
-# dǒng 🎥✨
+# dǒng
 
 **dǒng** dibuat untuk membantu memahami materi workshop, webinar, tedTalk, atau video conference berdurasi panjang dalam hitungan menit. 
 
