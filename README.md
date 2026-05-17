@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# dǒng 🎥✨
 
-## Getting Started
+**dǒng** dibuat untuk membantu memahami materi workshop, webinar, tedTalk, atau video conference berdurasi panjang dalam hitungan menit. 
 
-First, run the development server:
+Mengubah video menjadi ringkasan eksekutif, timeline pembahasan yang interaktif, dan glosarium istilah teknis yang mudah dipahami.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🚀 Fitur Utama
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Analisis AI Mendalam:** Menggunakan Google Gemini AI untuk mengekstrak inti sari video.
+- **Optimasi Video Panjang:** Menggunakan teknik **frame-rate compression** yang memungkinkan analisis video 30+ menit dengan cepat tanpa kehilangan konteks visual.
+- **Dukungan Multi-Sumber:** Upload file video lokal atau gunakan link dari YouTube, X (Twitter), dan platform lainnya.
+- **Progressive UI:** Update status real-time dengan progress bar sehingga Anda tahu persis apa yang sedang dilakukan sistem.
+- **Timeline Interaktif:** Klik pada timestamp untuk melompat ke bagian spesifik di pemutar video.
+- **Glosarium Otomatis:** Menjelaskan istilah teknis/slogan/bahasa sulit dengan analogi sederhana yang ramah awam.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 🛠️ Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+- **Frontend & Backend:** [Next.js 15+](https://nextjs.org/) (App Router)
+- **AI Engine:** [Google Gemini API](https://ai.google.dev/)
+- **Video Processing:** [FFmpeg](https://ffmpeg.org/) (untuk optimasi frame rate)
+- **Downloader:** [yt-dlp](https://github.com/yt-dlp/yt-dlp) (untuk dukungan URL universal)
+- **Linting & Formatting:** [Biome](https://biomejs.dev/)
+- **Runtime:** [Bun](https://bun.sh/)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 📦 Prasyarat
 
-## Deploy on Vercel
+Sebelum menjalankan proyek ini, pastikan sudah menginstal:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1.  **Bun** atau **Node.js**
+2.  **FFmpeg** (Pastikan tersedia di PATH sistem)
+3.  **yt-dlp** (Untuk fitur analisis lewat URL)
+4.  **Google Gemini API Key** (Dapatkan di [Google AI Studio](https://aistudio.google.com/))
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## ⚙️ Instalasi & Persiapan
+
+1.  **Clone repositori:**
+    ```bash
+    git clone https://github.com/username/dong.git
+    cd dong
+    ```
+
+2.  **Instal dependensi:**
+    ```bash
+    bun install
+    ```
+
+3.  **Konfigurasi Environment:**
+    Buat file `.env.local` di akar proyek dan tambahkan variabel berikut:
+    ```env
+    GEMINI_API_KEY=your_api_key_here
+    GEMINI_MODEL=your_model_here
+    GEMINI_SYSTEM_INSTRUCTION=your_system_instruction_here
+    ```
+
+---
+
+## 🖥️ Menjalankan Proyek
+
+1.  **Mode Pengembangan:**
+    ```bash
+    bun dev
+    ```
+    Buka [http://localhost:3000](http://localhost:3000) di browser.
+
+2.  **Pengecekan Kode (Linter):**
+    ```bash
+    bun run check
+    ```
+
+<!-- --- -->
+
+<!-- ## 💡 Bagaimana Cara Kerjanya?
+
+Untuk menangani video durasi panjang, dǒng menggunakan strategi optimasi khusus:
+
+1.  **Downsampling:** Jika menggunakan URL, video diunduh pada resolusi maksimal 360p.
+2.  **1 FPS Encoding:** Video dikompresi menjadi hanya 1 frame per detik. Ini mengurangi ukuran file hingga >90% namun tetap mempertahankan teks pada slide materi agar dapat dibaca oleh Gemini.
+3.  **Audio Downsampling:** Audio dikompresi ke bitrate rendah yang efisien untuk diproses oleh AI.
+4.  **NDJSON Streaming:** Backend mengirimkan progres langkah-demi-langkah ke Frontend agar pengguna mendapatkan umpan balik instan. -->
