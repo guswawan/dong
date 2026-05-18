@@ -1,8 +1,8 @@
 import { createReadStream } from "fs";
 import { stat } from "fs/promises";
+import type { NextRequest } from "next/server";
 import os from "os";
 import { join } from "path";
-import { type NextRequest } from "next/server";
 
 export async function GET(req: NextRequest) {
   const name = req.nextUrl.searchParams.get("name");
@@ -16,10 +16,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const fileStat = await stat(filePath);
-    
+
     // Gunakan ReadableStream untuk melakukan streaming video secara efisien (mendukung seeking)
     const stream = createReadStream(filePath);
-    
+
     // Tipe data stream untuk Web Response Next.js
     const webStream = new ReadableStream({
       start(controller) {
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       },
       cancel() {
         stream.destroy();
-      }
+      },
     });
 
     return new Response(webStream, {

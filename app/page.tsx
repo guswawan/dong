@@ -1,7 +1,7 @@
 "use client";
 
+import { del, get, set } from "idb-keyval";
 import { useEffect, useRef, useState } from "react";
-import { get, set, del } from "idb-keyval";
 import ReactPlayer from "react-player";
 
 type AnalysisResult = {
@@ -39,7 +39,9 @@ export default function DashboardPage() {
   useEffect(() => {
     const loadPersistedData = async () => {
       try {
-        const savedMethod = localStorage.getItem("inputMethod") as "file" | "url";
+        const savedMethod = localStorage.getItem("inputMethod") as
+          | "file"
+          | "url";
         if (savedMethod) setInputMethod(savedMethod);
 
         const savedUrlInput = localStorage.getItem("xUrlInput");
@@ -155,15 +157,24 @@ export default function DashboardPage() {
                 //error comes in the form of a double JSON string
                 const cleanError = update.error.replace(/^Error: /, "");
                 const parsedError = JSON.parse(cleanError);
-                errorMsg = parsedError.error?.message || parsedError.message || update.error;
+                errorMsg =
+                  parsedError.error?.message ||
+                  parsedError.message ||
+                  update.error;
               } catch (_e) {
                 // error is not JSON, let the original string
               }
 
-              if (errorMsg.toLowerCase().includes("quota") || errorMsg.includes("429")) {
+              if (
+                errorMsg.toLowerCase().includes("quota") ||
+                errorMsg.includes("429")
+              ) {
                 errorMsg =
                   "Batas penggunaan (Quota) API tercapai. Silakan tunggu sebentar lalu coba lagi.";
-              } else if (errorMsg.toLowerCase().includes("overloaded") || errorMsg.includes("503")) {
+              } else if (
+                errorMsg.toLowerCase().includes("overloaded") ||
+                errorMsg.includes("503")
+              ) {
                 errorMsg =
                   "Server sedang sangat sibuk. Silakan coba lagi dalam beberapa saat.";
               }
@@ -175,7 +186,10 @@ export default function DashboardPage() {
             } else if (update.success && update.data) {
               setResult(update.data);
 
-              localStorage.setItem("analysisResult", JSON.stringify(update.data));
+              localStorage.setItem(
+                "analysisResult",
+                JSON.stringify(update.data),
+              );
               localStorage.setItem("inputMethod", inputMethod);
               if (inputMethod === "url") {
                 localStorage.setItem("xUrlInput", xUrlInput);
@@ -319,7 +333,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Content Section (Split Layout) */}
-        {(videoUrl || result || (inputMethod === "url" && xUrlInput && loading)) && (
+        {(videoUrl ||
+          result ||
+          (inputMethod === "url" && xUrlInput && loading)) && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Left Column: Video Player */}
             <div className="space-y-4 sticky top-8 h-fit">
@@ -332,9 +348,12 @@ export default function DashboardPage() {
                     className="w-full h-full object-contain"
                   />
                 )}
-                {inputMethod === "url" && xUrlInput && hasMounted && (
+                {inputMethod === "url" &&
+                  xUrlInput &&
+                  hasMounted &&
                   (() => {
-                    const isPlayableLocally = xUrlInput.includes("youtube.com") ||
+                    const isPlayableLocally =
+                      xUrlInput.includes("youtube.com") ||
                       xUrlInput.includes("youtu.be") ||
                       xUrlInput.includes("vimeo.com");
                     if (isPlayableLocally) {
@@ -360,15 +379,18 @@ export default function DashboardPage() {
                     } else {
                       return (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 text-gray-400 p-6 text-center text-sm absolute inset-0">
-                          <p className="font-semibold text-white mb-1">Pratinjau Video Twitter/X</p>
+                          <p className="font-semibold text-white mb-1">
+                            Pratinjau Video Twitter/X
+                          </p>
                           <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
-                            Video dari X tidak bisa diputar langsung sebelum diproses. Pratinjau video akan aktif secara otomatis di sini setelah analisis selesai.
+                            Video dari X tidak bisa diputar langsung sebelum
+                            diproses. Pratinjau video akan aktif secara otomatis
+                            di sini setelah analisis selesai.
                           </p>
                         </div>
                       );
                     }
-                  })()
-                )}
+                  })()}
               </div>
             </div>
 
@@ -395,8 +417,8 @@ export default function DashboardPage() {
                         {status}
                       </p>
                       <p className="text-[10px] text-gray-400 px-4">
-                        Video sedang dioptimasi agar Gemini bisa
-                        membaca materi lebih cepat.
+                        Video sedang dioptimasi agar Gemini bisa membaca materi
+                        lebih cepat.
                       </p>
                     </div>
                   </div>

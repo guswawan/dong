@@ -1,8 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { exec } from "child_process";
-import { stat, unlink, writeFile, readdir } from "fs/promises";
+import { readdir, stat, unlink, writeFile } from "fs/promises";
 import os from "os";
-import { join, basename } from "path";
+import { basename, join } from "path";
 import { promisify } from "util";
 
 import { ANALYSIS_PROMPT, SYSTEM_INSTRUCTION } from "./prompts";
@@ -19,7 +19,8 @@ async function cleanOldTempFiles() {
       if (file.startsWith("vid_") && file.endsWith("_compressed.mp4")) {
         const filePath = join(tmpDir, file);
         const fileStat = await stat(filePath);
-        if (now - fileStat.mtimeMs > 3600 * 1000) { // > 1 hour
+        if (now - fileStat.mtimeMs > 3600 * 1000) {
+          // > 1 hour
           await unlink(filePath);
         }
       }
@@ -49,14 +50,26 @@ async function downloadUniversalVideo(
     const command = `yt-dlp --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 900" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`;
     const { stdout, stderr } = await execAsync(command);
 
-    if (stdout.includes("does not pass filter") || (stderr && stderr.includes("does not pass filter"))) {
-      throw new Error("Video terlalu panjang. Maksimal durasi adalah 15 menit.");
+    if (
+      stdout.includes("does not pass filter") ||
+      (stderr && stderr.includes("does not pass filter"))
+    ) {
+      throw new Error(
+        "Video terlalu panjang. Maksimal durasi adalah 15 menit.",
+      );
     }
 
-    const lines = stdout.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const lines = stdout
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
     const finalPath = lines.length > 0 ? lines[lines.length - 1] : "";
 
-    if (!finalPath || finalPath.includes("[download]") || finalPath.includes("ERROR:")) {
+    if (
+      !finalPath ||
+      finalPath.includes("[download]") ||
+      finalPath.includes("ERROR:")
+    ) {
       throw new Error("Gagal mengunduh video dari sumber tersebut.");
     }
 
@@ -66,8 +79,11 @@ async function downloadUniversalVideo(
     console.error("yt-dlp error:", error);
 
     // Jika error dilempar secara manual dari try block
-    if (error.message === "Video terlalu panjang. Maksimal durasi adalah 15 menit." ||
-      error.message === "Gagal mengunduh video dari sumber tersebut.") {
+    if (
+      error.message ===
+        "Video terlalu panjang. Maksimal durasi adalah 15 menit." ||
+      error.message === "Gagal mengunduh video dari sumber tersebut."
+    ) {
       throw error;
     }
 
@@ -76,16 +92,29 @@ async function downloadUniversalVideo(
     const allOutput = stderrStr + stdoutStr;
 
     // Periksa apakah error karena durasi
-    if (allOutput.includes("duration") || allOutput.includes("does not pass filter")) {
-      throw new Error("Video terlalu panjang. Maksimal durasi adalah 15 menit.");
+    if (
+      allOutput.includes("duration") ||
+      allOutput.includes("does not pass filter")
+    ) {
+      throw new Error(
+        "Video terlalu panjang. Maksimal durasi adalah 15 menit.",
+      );
     }
 
     // Tangani URL tidak valid
-    if (allOutput.includes("not a valid URL") || allOutput.includes("Unsupported URL") || allOutput.includes("No video formats")) {
-      throw new Error("Link URL video tidak valid atau tidak didukung. Pastikan Anda memasukkan link yang benar (contoh: https://x.com/...).");
+    if (
+      allOutput.includes("not a valid URL") ||
+      allOutput.includes("Unsupported URL") ||
+      allOutput.includes("No video formats")
+    ) {
+      throw new Error(
+        "Link URL video tidak valid atau tidak didukung. Pastikan Anda memasukkan link yang benar (contoh: https://x.com/...).",
+      );
     }
 
-    throw new Error("Gagal mengunduh video. Pastikan URL valid, publik, dan dapat diakses.");
+    throw new Error(
+      "Gagal mengunduh video. Pastikan URL valid, publik, dan dapat diakses.",
+    );
   }
 }
 
@@ -194,10 +223,7 @@ export async function POST(req: Request) {
               );
               await new Promise((resolve) => setTimeout(resolve, 1500));
             } else {
-              sendStatus(
-                "Sedang menganalisis video & menyusun materi...",
-                80,
-              );
+              sendStatus("Sedang menganalisis video & menyusun materi...", 80);
             }
 
             response = await ai.models.generateContent({
@@ -226,13 +252,20 @@ export async function POST(req: Request) {
               },
             });
 
-            console.log(`[ANALYSIS] Berhasil menggunakan model: ${currentModel}`);
+            console.log(
+              `[ANALYSIS] Berhasil menggunakan model: ${currentModel}`,
+            );
             break;
           } catch (error: any) {
             lastError = error;
             const status = error.status || error.code;
-            if ((status === 503 || status === 429) && i < modelPool.length - 1) {
-              console.warn(`Model ${currentModel} gagal (${status}), mencoba model berikutnya...`);
+            if (
+              (status === 503 || status === 429) &&
+              i < modelPool.length - 1
+            ) {
+              console.warn(
+                `Model ${currentModel} gagal (${status}), mencoba model berikutnya...`,
+              );
               continue;
             }
             throw error;
@@ -252,7 +285,10 @@ export async function POST(req: Request) {
           .trim();
         const resultJson = JSON.parse(responseText);
 
-        const videoFileName = shouldKeepCompressed && compressedPath ? basename(compressedPath) : null;
+        const videoFileName =
+          shouldKeepCompressed && compressedPath
+            ? basename(compressedPath)
+            : null;
 
         sendStatus("Selesai! Menyusun hasil untuk Anda...", 100);
         controller.enqueue(
@@ -260,7 +296,7 @@ export async function POST(req: Request) {
             `${JSON.stringify({
               success: true,
               data: resultJson,
-              videoFile: videoFileName
+              videoFile: videoFileName,
             })}\n`,
           ),
         );
@@ -277,12 +313,12 @@ export async function POST(req: Request) {
         if (tempFilePath) {
           try {
             await unlink(tempFilePath);
-          } catch (_e) { }
+          } catch (_e) {}
         }
         if (compressedPath && !shouldKeepCompressed) {
           try {
             await unlink(compressedPath);
-          } catch (_e) { }
+          } catch (_e) {}
         }
         controller.close();
       }
