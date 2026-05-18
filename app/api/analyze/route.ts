@@ -16,7 +16,7 @@ async function cleanOldTempFiles() {
     const files = await readdir(tmpDir);
     const now = Date.now();
     for (const file of files) {
-      if (file.startsWith("vid_") && file.endsWith("_compressed.mp4")) {
+      if (file.startsWith("vid_") && file.endsWith(".mp4")) {
         const filePath = join(tmpDir, file);
         const fileStat = await stat(filePath);
         if (now - fileStat.mtimeMs > 3600 * 1000) {
@@ -41,6 +41,62 @@ async function compressVideo(inputPath: string): Promise<string> {
   }
 }
 
+async function downloadViaCobalt(
+  url: string,
+  outputPath: string,
+): Promise<string> {
+  const cobaltUrl = process.env.COBALT_API_URL || "https://api.cobalt.tools/api/json";
+
+  console.log(`[COBALT] Mencoba mengunduh video menggunakan Cobalt API (${cobaltUrl}) untuk: ${url}`);
+
+  const response = await fetch(cobaltUrl, {
+    method: "POST",
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      url: url,
+      vQuality: "360", // Resolusi rendah agar proses cepat dan hemat bandwidth
+      isAudioOnly: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Cobalt API gagal dengan status ${response.status}: ${errorText}`);
+  }
+
+  const data: any = await response.json();
+  if (data.status === "error") {
+    throw new Error(`Cobalt API error: ${data.text || "Unknown error"}`);
+  }
+
+  const downloadUrl = data.url;
+  if (!downloadUrl) {
+    throw new Error("Tidak ada download URL yang dikembalikan dari Cobalt API");
+  }
+
+  console.log(`[COBALT] Berhasil mendapatkan URL stream, mulai mengunduh file...`);
+  const fileResponse = await fetch(downloadUrl);
+  if (!fileResponse.ok) {
+    throw new Error(`Gagal mengunduh file dari URL Cobalt: ${fileResponse.statusText}`);
+  }
+
+  const arrayBuffer = await fileResponse.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const finalPath = `${outputPath}.mp4`;
+  await writeFile(finalPath, buffer);
+
+  const fileStat = await stat(finalPath);
+  if (fileStat.size === 0) {
+    throw new Error("File hasil download Cobalt berukuran 0 byte");
+  }
+
+  console.log(`[COBALT] Selesai mengunduh video via Cobalt ke: ${finalPath}`);
+  return finalPath;
+}
+
 async function downloadUniversalVideo(
   url: string,
 ): Promise<{ tempPath: string; mimeType: string }> {
@@ -59,17 +115,21 @@ async function downloadUniversalVideo(
 
     const cookieFlag = hasCookies ? `--cookies "${cookiePath}"` : "";
 
+    // Tambahkan opsi Proxy jika didefinisikan untuk menembus IP blocking Cloud Run
+    const youtubeProxy = process.env.YOUTUBE_PROXY || process.env.PROXY_URL || process.env.HTTP_PROXY;
+    const proxyFlag = youtubeProxy ? `--proxy "${youtubeProxy}"` : "";
+
     // Gunakan extractor-args untuk mencoba bypass bot detection dan force IPv4
     // player_client=android,web seringkali lebih ampuh di cloud environment
     // Tambahkan --js-runtime node karena di Docker image runner sudah ada Node.js
     const bypassArgs = `--extractor-args "youtube:player_client=android,web" --force-ipv4 --js-runtime node`;
 
-    const command = `yt-dlp ${cookieFlag} ${bypassArgs} --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 900" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`;
+    const command = `yt-dlp ${cookieFlag} ${proxyFlag} ${bypassArgs} --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 900" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`;
     const { stdout, stderr } = await execAsync(command);
 
     if (
       stdout.includes("does not pass filter") ||
-      (stderr && stderr.includes("does not pass filter"))
+      stderr?.includes("does not pass filter")
     ) {
       throw new Error(
         "Video terlalu panjang. Maksimal durasi adalah 15 menit.",
@@ -108,11 +168,27 @@ async function downloadUniversalVideo(
     const stdoutStr = error.stdout || "";
     const allOutput = stderrStr + stdoutStr;
 
-    // Periksa apakah error karena bot detection
-    if (allOutput.includes("Sign in to confirm you’re not a bot")) {
-      throw new Error(
-        "YouTube memblokir akses (Bot Detection). Silakan coba lagi nanti atau hubungi admin untuk memperbarui cookies.",
-      );
+    const isYouTube = url.includes("youtube.com") || url.includes("youtu.be");
+
+    // Jika terjadi bot detection / pemblokiran akses otomatis untuk YouTube di production,
+    // kita akan mencoba fallback menggunakan Cobalt API secara otomatis agar user tidak perlu
+    // mendownload secara manual!
+    if (
+      isYouTube &&
+      (allOutput.includes("confirm you") ||
+        allOutput.includes("Sign in") ||
+        allOutput.includes("403: Forbidden") ||
+        allOutput.includes("No video formats") ||
+        allOutput.includes("Unsupported URL") ||
+        allOutput.includes("not a valid URL"))
+    ) {
+      try {
+        console.log("[FALLBACK] yt-dlp diblokir atau gagal. Mencoba mengunduh menggunakan Cobalt API...");
+        const finalPath = await downloadViaCobalt(url, outputPath);
+        return { tempPath: finalPath, mimeType: "video/mp4" };
+      } catch (fallbackError: any) {
+        console.error("Cobalt Fallback Error:", fallbackError);
+      }
     }
 
     // Periksa apakah error karena durasi
@@ -134,6 +210,20 @@ async function downloadUniversalVideo(
       throw new Error(
         "Link URL video tidak valid atau tidak didukung. Pastikan Anda memasukkan link yang benar (contoh: https://x.com/...).",
       );
+    }
+
+    if (isYouTube) {
+      // Upaya terakhir jika ada error lain untuk YouTube
+      try {
+        console.log("[LAST RESORT FALLBACK] Mencoba Cobalt API...");
+        const finalPath = await downloadViaCobalt(url, outputPath);
+        return { tempPath: finalPath, mimeType: "video/mp4" };
+      } catch (fallbackError: any) {
+        console.error("Last resort Cobalt fallback failed:", fallbackError);
+        throw new Error(
+          "YouTube memblokir akses otomatis (Bot Detection) di server Cloud Run/Production dan upaya unduhan alternatif (Cobalt API) juga gagal. Silakan hubungi admin untuk mengonfigurasi proxy/cookies, atau gunakan tab 'Upload File'.",
+        );
+      }
     }
 
     throw new Error(
@@ -161,7 +251,7 @@ export async function POST(req: Request) {
 
       let tempFilePath = "";
       let compressedPath = "";
-      let shouldKeepCompressed = false;
+      let shouldKeepOriginal = false;
 
       // Bersihkan file lama secara background
       cleanOldTempFiles().catch(console.error);
@@ -203,7 +293,7 @@ export async function POST(req: Request) {
 
           sendStatus("Mengompresi video hasil unduhan...", 30);
           compressedPath = await compressVideo(tempFilePath);
-          shouldKeepCompressed = true;
+          shouldKeepOriginal = true;
         }
 
         sendStatus("Mengunggah video terkompresi...", 45);
@@ -241,8 +331,8 @@ export async function POST(req: Request) {
           .filter((m) => m !== "");
         const modelPool = [mainModel, ...fallbackModels];
 
-        let response;
-        let lastError;
+        let response: any;
+        let lastError: any;
 
         for (let i = 0; i < modelPool.length; i++) {
           const currentModel = modelPool[i];
@@ -317,9 +407,7 @@ export async function POST(req: Request) {
         const resultJson = JSON.parse(responseText);
 
         const videoFileName =
-          shouldKeepCompressed && compressedPath
-            ? basename(compressedPath)
-            : null;
+          shouldKeepOriginal && tempFilePath ? basename(tempFilePath) : null;
 
         sendStatus("Selesai! Menyusun hasil untuk Anda...", 100);
         controller.enqueue(
@@ -341,12 +429,12 @@ export async function POST(req: Request) {
           ),
         );
       } finally {
-        if (tempFilePath) {
+        if (tempFilePath && !shouldKeepOriginal) {
           try {
             await unlink(tempFilePath);
           } catch (_e) {}
         }
-        if (compressedPath && !shouldKeepCompressed) {
+        if (compressedPath) {
           try {
             await unlink(compressedPath);
           } catch (_e) {}

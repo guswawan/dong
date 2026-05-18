@@ -18,7 +18,7 @@ type AnalysisResult = {
 export default function DashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoFileServer, setVideoFileServer] = useState<string | null>(null);
+  const [_videoFileServer, setVideoFileServer] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
