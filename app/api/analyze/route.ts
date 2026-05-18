@@ -45,7 +45,7 @@ async function downloadViaCobalt(
   url: string,
   outputPath: string,
 ): Promise<string> {
-  const cobaltUrl = process.env.COBALT_API_URL || "https://api.cobalt.tools/api/json";
+  const cobaltUrl = process.env.COBALT_API_URL || "https://api.cobalt.tools/";
 
   console.log(`[COBALT] Mencoba mengunduh video menggunakan Cobalt API (${cobaltUrl}) untuk: ${url}`);
 
@@ -57,8 +57,7 @@ async function downloadViaCobalt(
     },
     body: JSON.stringify({
       url: url,
-      vQuality: "360", // Resolusi rendah agar proses cepat dan hemat bandwidth
-      isAudioOnly: false,
+      videoQuality: "360",
     }),
   });
 
