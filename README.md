@@ -58,8 +58,8 @@ Sebelum menjalankan proyek ini, pastikan sudah menginstal:
     Buat file `.env.local` di akar proyek dan tambahkan variabel berikut:
     ```env
     GEMINI_API_KEY=your_api_key_here
-    GEMINI_MODEL=gemini-2.5-flash # Model utama (misal: gemini-2.5-flash)
-    GEMINI_FALLBACK_MODELS=gemini-2.5-pro,gemini-1.5-flash # Model cadangan jika model utama sibuk/quota limit (dipisahkan koma)
+    GEMINI_MODEL=your_model_here
+    GEMINI_FALLBACK_MODELS=your_llm_model
     ```
 
 ---
