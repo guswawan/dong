@@ -46,8 +46,25 @@ async function downloadUniversalVideo(
 ): Promise<{ tempPath: string; mimeType: string }> {
   const fileBase = `vid_${Date.now()}`;
   const outputPath = join(os.tmpdir(), fileBase);
+  const cookiePath = join(os.tmpdir(), `cookies_${Date.now()}.txt`);
+  let hasCookies = false;
+
   try {
-    const command = `yt-dlp --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 900" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`;
+    // Cek apakah ada cookies di environment variable untuk bypass bot detection YouTube
+    const youtubeCookies = process.env.YOUTUBE_COOKIES;
+    if (youtubeCookies) {
+      await writeFile(cookiePath, youtubeCookies);
+      hasCookies = true;
+    }
+
+    const cookieFlag = hasCookies ? `--cookies "${cookiePath}"` : "";
+
+    // Gunakan extractor-args untuk mencoba bypass bot detection dan force IPv4
+    // player_client=android,web seringkali lebih ampuh di cloud environment
+    // Tambahkan --js-runtime node karena di Docker image runner sudah ada Node.js
+    const bypassArgs = `--extractor-args "youtube:player_client=android,web" --force-ipv4 --js-runtime node`;
+
+    const command = `yt-dlp ${cookieFlag} ${bypassArgs} --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 900" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`;
     const { stdout, stderr } = await execAsync(command);
 
     if (
@@ -91,6 +108,13 @@ async function downloadUniversalVideo(
     const stdoutStr = error.stdout || "";
     const allOutput = stderrStr + stdoutStr;
 
+    // Periksa apakah error karena bot detection
+    if (allOutput.includes("Sign in to confirm you’re not a bot")) {
+      throw new Error(
+        "YouTube memblokir akses (Bot Detection). Silakan coba lagi nanti atau hubungi admin untuk memperbarui cookies.",
+      );
+    }
+
     // Periksa apakah error karena durasi
     if (
       allOutput.includes("duration") ||
@@ -115,6 +139,13 @@ async function downloadUniversalVideo(
     throw new Error(
       "Gagal mengunduh video. Pastikan URL valid, publik, dan dapat diakses.",
     );
+  } finally {
+    // Hapus file cookies jika ada
+    if (hasCookies) {
+      try {
+        await unlink(cookiePath);
+      } catch (_e) {}
+    }
   }
 }
 
