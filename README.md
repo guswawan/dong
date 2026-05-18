@@ -10,9 +10,11 @@ Mengubah video menjadi ringkasan eksekutif, timeline pembahasan yang interaktif,
 
 - **Analisis AI Mendalam:** Menggunakan Google Gemini AI untuk mengekstrak inti sari video.
 - **Optimasi Video Panjang:** Menggunakan teknik **frame-rate compression** yang memungkinkan analisis video 30+ menit dengan cepat tanpa kehilangan konteks visual.
-- **Dukungan Multi-Sumber:** Upload file video lokal atau gunakan link dari YouTube, X (Twitter), dan platform lainnya.
+- **Dukungan Multi-Sumber:** Upload file video lokal atau gunakan link universal dari YouTube, X (Twitter), dan platform lainnya.
+- **Failover Robustness:** Sistem pool model cadangan (`GEMINI_FALLBACK_MODELS`) yang otomatis mendeteksi kegagalan API/quota limit pada model utama dan beralih ke model cadangan tanpa membatalkan proses analisis.
+- **Limitasi & Validasi Video:** Proteksi durasi video (maksimal 15 menit) untuk pengunggahan via URL guna memastikan proses pengunduhan & kompresi berjalan optimal.
 - **Progressive UI:** Update status real-time dengan progress bar sehingga Anda tahu persis apa yang sedang dilakukan sistem.
-- **Timeline Interaktif:** Klik pada timestamp untuk melompat ke bagian spesifik di pemutar video.
+- **Timeline Interaktif:** Klik pada timestamp untuk melompat ke bagian spesifik di pemutar video secara langsung menggunakan `ReactPlayer` untuk platform eksternal.
 - **Glosarium Otomatis:** Menjelaskan istilah teknis/slogan/bahasa sulit dengan analogi sederhana yang ramah awam.
 
 ---
@@ -56,8 +58,8 @@ Sebelum menjalankan proyek ini, pastikan sudah menginstal:
     Buat file `.env.local` di akar proyek dan tambahkan variabel berikut:
     ```env
     GEMINI_API_KEY=your_api_key_here
-    GEMINI_MODEL=your_model_here
-    GEMINI_SYSTEM_INSTRUCTION=your_system_instruction_here
+    GEMINI_MODEL=gemini-2.5-flash # Model utama (misal: gemini-2.5-flash)
+    GEMINI_FALLBACK_MODELS=gemini-2.5-pro,gemini-1.5-flash # Model cadangan jika model utama sibuk/quota limit (dipisahkan koma)
     ```
 
 ---

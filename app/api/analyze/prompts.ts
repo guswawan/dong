@@ -2,9 +2,7 @@
  * Prompt untuk instruksi sistem (System Instruction)
  * Mendefinisikan kepribadian dan batasan AI.
  */
-export const SYSTEM_INSTRUCTION =
-  process.env.GEMINI_SYSTEM_INSTRUCTION ||
-  "Anda adalah seorang pendidik yang ahli menyederhanakan materi teknologi yang rumit menjadi bahasa yang ramah awam. Berikan output HANYA dalam format JSON yang valid.";
+export const SYSTEM_INSTRUCTION = process.env.GEMINI_SYSTEM_INSTRUCTION || "";
 
 /**
  * Prompt untuk analisis video (User Prompt)

@@ -1,14 +1,33 @@
 import { GoogleGenAI } from "@google/genai";
 import { exec } from "child_process";
-import { stat, unlink, writeFile } from "fs/promises";
+import { stat, unlink, writeFile, readdir } from "fs/promises";
 import os from "os";
-import { join } from "path";
+import { join, basename } from "path";
 import { promisify } from "util";
 
 import { ANALYSIS_PROMPT, SYSTEM_INSTRUCTION } from "./prompts";
 
 const execAsync = promisify(exec);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+async function cleanOldTempFiles() {
+  try {
+    const tmpDir = os.tmpdir();
+    const files = await readdir(tmpDir);
+    const now = Date.now();
+    for (const file of files) {
+      if (file.startsWith("vid_") && file.endsWith("_compressed.mp4")) {
+        const filePath = join(tmpDir, file);
+        const fileStat = await stat(filePath);
+        if (now - fileStat.mtimeMs > 3600 * 1000) { // > 1 hour
+          await unlink(filePath);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Gagal membersihkan file temp lama:", e);
+  }
+}
 
 async function compressVideo(inputPath: string): Promise<string> {
   const outputPath = `${inputPath.replace(/\.[^/.]+$/, "")}_compressed.mp4`;
@@ -24,15 +43,49 @@ async function compressVideo(inputPath: string): Promise<string> {
 async function downloadUniversalVideo(
   url: string,
 ): Promise<{ tempPath: string; mimeType: string }> {
-  const fileName = `vid_${Date.now()}.mp4`;
-  const outputPath = join(os.tmpdir(), fileName);
+  const fileBase = `vid_${Date.now()}`;
+  const outputPath = join(os.tmpdir(), fileBase);
   try {
-    const command = `yt-dlp -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/worst" --max-filesize 500M --merge-output-format mp4 -o "${outputPath}" "${url}"`;
-    await execAsync(command);
-    await stat(outputPath);
-    return { tempPath: outputPath, mimeType: "video/mp4" };
-  } catch (_error: any) {
-    throw new Error("Gagal mengunduh video. Pastikan URL valid.");
+    const command = `yt-dlp --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 900" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`;
+    const { stdout, stderr } = await execAsync(command);
+
+    if (stdout.includes("does not pass filter") || (stderr && stderr.includes("does not pass filter"))) {
+      throw new Error("Video terlalu panjang. Maksimal durasi adalah 15 menit.");
+    }
+
+    const lines = stdout.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const finalPath = lines.length > 0 ? lines[lines.length - 1] : "";
+
+    if (!finalPath || finalPath.includes("[download]") || finalPath.includes("ERROR:")) {
+      throw new Error("Gagal mengunduh video dari sumber tersebut.");
+    }
+
+    await stat(finalPath);
+    return { tempPath: finalPath, mimeType: "video/mp4" };
+  } catch (error: any) {
+    console.error("yt-dlp error:", error);
+
+    // Jika error dilempar secara manual dari try block
+    if (error.message === "Video terlalu panjang. Maksimal durasi adalah 15 menit." ||
+      error.message === "Gagal mengunduh video dari sumber tersebut.") {
+      throw error;
+    }
+
+    const stderrStr = error.stderr || "";
+    const stdoutStr = error.stdout || "";
+    const allOutput = stderrStr + stdoutStr;
+
+    // Periksa apakah error karena durasi
+    if (allOutput.includes("duration") || allOutput.includes("does not pass filter")) {
+      throw new Error("Video terlalu panjang. Maksimal durasi adalah 15 menit.");
+    }
+
+    // Tangani URL tidak valid
+    if (allOutput.includes("not a valid URL") || allOutput.includes("Unsupported URL") || allOutput.includes("No video formats")) {
+      throw new Error("Link URL video tidak valid atau tidak didukung. Pastikan Anda memasukkan link yang benar (contoh: https://x.com/...).");
+    }
+
+    throw new Error("Gagal mengunduh video. Pastikan URL valid, publik, dan dapat diakses.");
   }
 }
 
@@ -48,6 +101,10 @@ export async function POST(req: Request) {
 
       let tempFilePath = "";
       let compressedPath = "";
+      let shouldKeepCompressed = false;
+
+      // Bersihkan file lama secara background
+      cleanOldTempFiles().catch(console.error);
 
       try {
         const formData = await req.formData();
@@ -86,6 +143,7 @@ export async function POST(req: Request) {
 
           sendStatus("Mengompresi video hasil unduhan...", 30);
           compressedPath = await compressVideo(tempFilePath);
+          shouldKeepCompressed = true;
         }
 
         sendStatus("Mengunggah video terkompresi...", 45);
@@ -116,32 +174,74 @@ export async function POST(req: Request) {
           throw new Error("Gagal memproses file video ini.");
         }
 
-        sendStatus("Sedang menganalisis konten video & menyusun materi...", 80);
-        const response = await ai.models.generateContent({
-          model: process.env.GEMINI_MODEL || "",
-          contents: [
-            {
-              role: "user",
-              parts: [
+        const mainModel = process.env.GEMINI_MODEL || "";
+        const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || "")
+          .split(",")
+          .map((m) => m.trim())
+          .filter((m) => m !== "");
+        const modelPool = [mainModel, ...fallbackModels];
+
+        let response;
+        let lastError;
+
+        for (let i = 0; i < modelPool.length; i++) {
+          const currentModel = modelPool[i];
+          try {
+            if (i > 0) {
+              sendStatus(
+                `Sedang ada lonjakan pengguna, mencoba model cadangan...`,
+                80 + i * 2,
+              );
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+            } else {
+              sendStatus(
+                "Sedang menganalisis video & menyusun materi...",
+                80,
+              );
+            }
+
+            response = await ai.models.generateContent({
+              model: currentModel,
+              contents: [
                 {
-                  fileData: {
-                    fileUri: uploadResult.uri,
-                    mimeType: uploadResult.mimeType,
-                  },
-                },
-                {
-                  text: ANALYSIS_PROMPT,
+                  role: "user",
+                  parts: [
+                    {
+                      fileData: {
+                        fileUri: uploadResult.uri,
+                        mimeType: uploadResult.mimeType,
+                      },
+                    },
+                    {
+                      text: ANALYSIS_PROMPT,
+                    },
+                  ],
                 },
               ],
-            },
-          ],
-          config: {
-            systemInstruction: SYSTEM_INSTRUCTION,
-            temperature: 0.4,
-            maxOutputTokens: 8192,
-            responseMimeType: "application/json",
-          },
-        });
+              config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+                temperature: 0.4,
+                maxOutputTokens: 8192,
+                responseMimeType: "application/json",
+              },
+            });
+
+            console.log(`[ANALYSIS] Berhasil menggunakan model: ${currentModel}`);
+            break;
+          } catch (error: any) {
+            lastError = error;
+            const status = error.status || error.code;
+            if ((status === 503 || status === 429) && i < modelPool.length - 1) {
+              console.warn(`Model ${currentModel} gagal (${status}), mencoba model berikutnya...`);
+              continue;
+            }
+            throw error;
+          }
+        }
+
+        if (!response) {
+          throw lastError || new Error("Gagal mendapatkan respon dari AI.");
+        }
 
         await ai.files.delete({ name: uploadResult.name });
 
@@ -152,10 +252,16 @@ export async function POST(req: Request) {
           .trim();
         const resultJson = JSON.parse(responseText);
 
+        const videoFileName = shouldKeepCompressed && compressedPath ? basename(compressedPath) : null;
+
         sendStatus("Selesai! Menyusun hasil untuk Anda...", 100);
         controller.enqueue(
           encoder.encode(
-            `${JSON.stringify({ success: true, data: resultJson })}\n`,
+            `${JSON.stringify({
+              success: true,
+              data: resultJson,
+              videoFile: videoFileName
+            })}\n`,
           ),
         );
       } catch (error: any) {
@@ -168,13 +274,15 @@ export async function POST(req: Request) {
           ),
         );
       } finally {
-        const filesToCleanup = [tempFilePath, compressedPath];
-        for (const path of filesToCleanup) {
-          if (path) {
-            try {
-              await unlink(path);
-            } catch (_e) {}
-          }
+        if (tempFilePath) {
+          try {
+            await unlink(tempFilePath);
+          } catch (_e) { }
+        }
+        if (compressedPath && !shouldKeepCompressed) {
+          try {
+            await unlink(compressedPath);
+          } catch (_e) { }
         }
         controller.close();
       }
