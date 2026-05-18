@@ -91,8 +91,14 @@ export async function POST(req: Request) {
         sendStatus("Mengunggah video terkompresi...", 45);
         const uploadResult = await ai.files.upload({
           file: compressedPath,
-          mimeType: mimeType,
+          config: {
+            mimeType: mimeType,
+          },
         });
+
+        if (!uploadResult.name) {
+          throw new Error("Gagal mengunggah file video");
+        }
 
         let fileState = await ai.files.get({ name: uploadResult.name });
         let retryCount = 0;
