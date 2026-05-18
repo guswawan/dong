@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "dǒng - Pahami Materi Workshop Lebih Cepat",
-  description: "Alat analisis video berbasis AI untuk membantu Anda memahami materi workshop dalam hitungan menit.",
+  description:
+    "Alat analisis video berbasis AI untuk membantu Anda memahami materi workshop dalam hitungan menit.",
 };
 
 export default function RootLayout({
