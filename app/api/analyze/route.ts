@@ -43,10 +43,15 @@ async function compressVideo(inputPath: string): Promise<string> {
 
 async function getPublicCobaltInstances(): Promise<string[]> {
   try {
-    console.log("[COBALT] Mengambil daftar instance publik yang online dari tracker...");
-    const response = await fetch("https://instances.cobalt.best/api/instances.json", {
-      headers: { "Accept": "application/json" }
-    });
+    console.log(
+      "[COBALT] Mengambil daftar instance publik yang online dari tracker...",
+    );
+    const response = await fetch(
+      "https://instances.cobalt.best/api/instances.json",
+      {
+        headers: { Accept: "application/json" },
+      },
+    );
     if (!response.ok) {
       throw new Error(`Gagal mengambil instance: ${response.statusText}`);
     }
@@ -58,11 +63,11 @@ async function getPublicCobaltInstances(): Promise<string[]> {
     // Filter instance yang online.api === true, abaikan cobalt.tools yang mewajibkan JWT,
     // dan urutkan berdasarkan score tertinggi
     const sorted = data
-      .filter((inst: any) => 
-        inst && 
-        inst.api && 
-        inst.online?.api === true &&
-        !inst.api.includes("cobalt.tools")
+      .filter(
+        (inst: any) =>
+          inst?.api &&
+          inst.online?.api === true &&
+          !inst.api.includes("cobalt.tools"),
       )
       .sort((a: any, b: any) => {
         const scoreA = a.score || 0;
@@ -88,7 +93,7 @@ async function tryCobaltRequest(
   const response = await fetch(cleanBaseUrl, {
     method: "POST",
     headers: {
-      "Accept": "application/json",
+      Accept: "application/json",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -114,7 +119,9 @@ async function tryCobaltRequest(
     throw new Error("Tidak ada download URL yang dikembalikan dari API");
   }
 
-  console.log(`[COBALT] Berhasil mendapatkan URL stream, mulai mengunduh file...`);
+  console.log(
+    `[COBALT] Berhasil mendapatkan URL stream, mulai mengunduh file...`,
+  );
   const fileResponse = await fetch(downloadUrl);
   if (!fileResponse.ok) {
     throw new Error(`Gagal mengunduh file stream: ${fileResponse.statusText}`);
@@ -141,9 +148,16 @@ async function downloadViaCobalt(
   // Jika pengguna menyetel custom COBALT_API_URL, gunakan itu secara mutlak terlebih dahulu
   if (process.env.COBALT_API_URL) {
     try {
-      return await tryCobaltRequest(process.env.COBALT_API_URL, url, outputPath);
+      return await tryCobaltRequest(
+        process.env.COBALT_API_URL,
+        url,
+        outputPath,
+      );
     } catch (e: any) {
-      console.error(`[COBALT] Custom API URL (${process.env.COBALT_API_URL}) gagal:`, e);
+      console.error(
+        `[COBALT] Custom API URL (${process.env.COBALT_API_URL}) gagal:`,
+        e,
+      );
       throw e;
     }
   }
@@ -156,14 +170,17 @@ async function downloadViaCobalt(
     "https://cobalt.xyz/",
     "https://cobalt.unblocker.cc/",
     "https://co.wuk.sh/",
-    "https://cobalt.sh/"
+    "https://cobalt.sh/",
   ];
 
   // Gabungkan, bersihkan duplikat, dan pastikan tidak ada domain cobalt.tools
-  const allInstances = Array.from(new Set([...publicInstances, ...staticFallbacks]))
-    .filter((instanceUrl) => !instanceUrl.includes("cobalt.tools"));
+  const allInstances = Array.from(
+    new Set([...publicInstances, ...staticFallbacks]),
+  ).filter((instanceUrl) => !instanceUrl.includes("cobalt.tools"));
 
-  console.log(`[COBALT] Mulai memproses sekuensial pada ${allInstances.length} instance...`);
+  console.log(
+    `[COBALT] Mulai memproses sekuensial pada ${allInstances.length} instance...`,
+  );
 
   let lastError: any = null;
   for (const instanceUrl of allInstances) {
@@ -172,14 +189,13 @@ async function downloadViaCobalt(
     } catch (e: any) {
       console.warn(`[COBALT] Instance ${instanceUrl} gagal:`, e.message || e);
       lastError = e;
-      continue; // Coba instance berikutnya jika yang ini gagal
     }
   }
 
   throw new Error(
     `Semua instansi Cobalt API (${allInstances.length} server) gagal memproses unduhan. Error terakhir: ${
       lastError?.message || lastError || "Unknown"
-    }`
+    }`,
   );
 }
 
@@ -202,7 +218,10 @@ async function downloadUniversalVideo(
     const cookieFlag = hasCookies ? `--cookies "${cookiePath}"` : "";
 
     // Tambahkan opsi Proxy jika didefinisikan untuk menembus IP blocking Cloud Run
-    const youtubeProxy = process.env.YOUTUBE_PROXY || process.env.PROXY_URL || process.env.HTTP_PROXY;
+    const youtubeProxy =
+      process.env.YOUTUBE_PROXY ||
+      process.env.PROXY_URL ||
+      process.env.HTTP_PROXY;
     const proxyFlag = youtubeProxy ? `--proxy "${youtubeProxy}"` : "";
 
     // Gunakan extractor-args untuk mencoba bypass bot detection dan force IPv4
@@ -269,7 +288,9 @@ async function downloadUniversalVideo(
         allOutput.includes("not a valid URL"))
     ) {
       try {
-        console.log("[FALLBACK] yt-dlp diblokir atau gagal. Mencoba mengunduh menggunakan Cobalt API...");
+        console.log(
+          "[FALLBACK] yt-dlp diblokir atau gagal. Mencoba mengunduh menggunakan Cobalt API...",
+        );
         const finalPath = await downloadViaCobalt(url, outputPath);
         return { tempPath: finalPath, mimeType: "video/mp4" };
       } catch (fallbackError: any) {
@@ -465,13 +486,13 @@ export async function POST(req: Request) {
             break;
           } catch (error: any) {
             lastError = error;
+            // Perbolehkan failover untuk error transien/server (500, 503, 429)
             const status = error.status || error.code;
-            if (
-              (status === 503 || status === 429) &&
-              i < modelPool.length - 1
-            ) {
+            const isTransientError =
+              status === 500 || status === 503 || status === 429;
+            if (isTransientError && i < modelPool.length - 1) {
               console.warn(
-                `Model ${currentModel} gagal (${status}), mencoba model berikutnya...`,
+                `Model ${currentModel} gagal (${status || error.message || error}), mencoba model berikutnya...`,
               );
               continue;
             }
