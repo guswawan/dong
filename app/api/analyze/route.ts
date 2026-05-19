@@ -41,45 +41,77 @@ async function compressVideo(inputPath: string): Promise<string> {
   }
 }
 
-async function downloadViaCobalt(
-  url: string,
+async function getPublicCobaltInstances(): Promise<string[]> {
+  try {
+    console.log("[COBALT] Mengambil daftar instance publik yang online dari tracker...");
+    const response = await fetch("https://instances.cobalt.best/api/instances.json", {
+      headers: { "Accept": "application/json" }
+    });
+    if (!response.ok) {
+      throw new Error(`Gagal mengambil instance: ${response.statusText}`);
+    }
+    const data: any = await response.json();
+    if (!Array.isArray(data)) {
+      return [];
+    }
+
+    // Filter instance yang online.api === true dan urutkan berdasarkan score tertinggi
+    const sorted = data
+      .filter((inst: any) => inst && inst.api && inst.online?.api === true)
+      .sort((a: any, b: any) => {
+        const scoreA = a.score || 0;
+        const scoreB = b.score || 0;
+        return scoreB - scoreA;
+      });
+
+    return sorted.map((inst: any) => inst.api);
+  } catch (error) {
+    console.error("[COBALT] Gagal mengambil daftar instance publik:", error);
+    return [];
+  }
+}
+
+async function tryCobaltRequest(
+  baseApiUrl: string,
+  videoUrl: string,
   outputPath: string,
 ): Promise<string> {
-  const cobaltUrl = process.env.COBALT_API_URL || "https://api.cobalt.tools/";
+  const cleanBaseUrl = baseApiUrl.endsWith("/") ? baseApiUrl : `${baseApiUrl}/`;
+  console.log(`[COBALT] Mencoba API: ${cleanBaseUrl}`);
 
-  console.log(`[COBALT] Mencoba mengunduh video menggunakan Cobalt API (${cobaltUrl}) untuk: ${url}`);
-
-  const response = await fetch(cobaltUrl, {
+  const response = await fetch(cleanBaseUrl, {
     method: "POST",
     headers: {
       "Accept": "application/json",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      url: url,
+      url: videoUrl,
       videoQuality: "360",
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Cobalt API gagal dengan status ${response.status}: ${errorText}`);
+    throw new Error(`Status ${response.status}: ${errorText}`);
   }
 
   const data: any = await response.json();
   if (data.status === "error") {
-    throw new Error(`Cobalt API error: ${data.text || "Unknown error"}`);
+    const errObj = data.error || {};
+    const errMsg = data.text || errObj.code || "Unknown error";
+    throw new Error(`API error: ${errMsg}`);
   }
 
   const downloadUrl = data.url;
   if (!downloadUrl) {
-    throw new Error("Tidak ada download URL yang dikembalikan dari Cobalt API");
+    throw new Error("Tidak ada download URL yang dikembalikan dari API");
   }
 
   console.log(`[COBALT] Berhasil mendapatkan URL stream, mulai mengunduh file...`);
   const fileResponse = await fetch(downloadUrl);
   if (!fileResponse.ok) {
-    throw new Error(`Gagal mengunduh file dari URL Cobalt: ${fileResponse.statusText}`);
+    throw new Error(`Gagal mengunduh file stream: ${fileResponse.statusText}`);
   }
 
   const arrayBuffer = await fileResponse.arrayBuffer();
@@ -89,11 +121,60 @@ async function downloadViaCobalt(
 
   const fileStat = await stat(finalPath);
   if (fileStat.size === 0) {
-    throw new Error("File hasil download Cobalt berukuran 0 byte");
+    throw new Error("File stream hasil unduhan berukuran 0 byte");
   }
 
   console.log(`[COBALT] Selesai mengunduh video via Cobalt ke: ${finalPath}`);
   return finalPath;
+}
+
+async function downloadViaCobalt(
+  url: string,
+  outputPath: string,
+): Promise<string> {
+  // Jika pengguna menyetel custom COBALT_API_URL, gunakan itu secara mutlak terlebih dahulu
+  if (process.env.COBALT_API_URL) {
+    try {
+      return await tryCobaltRequest(process.env.COBALT_API_URL, url, outputPath);
+    } catch (e: any) {
+      console.error(`[COBALT] Custom API URL (${process.env.COBALT_API_URL}) gagal:`, e);
+      throw e;
+    }
+  }
+
+  // Ambil daftar instance dinamis
+  const publicInstances = await getPublicCobaltInstances();
+
+  // Daftarkan juga beberapa fallback statis yang handal jika tracker offline
+  const staticFallbacks = [
+    "https://api.cobalt.tools/",
+    "https://cobalt.xyz/",
+    "https://cobalt.unblocker.cc/",
+    "https://co.wuk.sh/",
+    "https://cobalt.sh/"
+  ];
+
+  // Gabungkan dan bersihkan duplikat
+  const allInstances = Array.from(new Set([...publicInstances, ...staticFallbacks]));
+
+  console.log(`[COBALT] Mulai memproses sekuensial pada ${allInstances.length} instance...`);
+
+  let lastError: any = null;
+  for (const instanceUrl of allInstances) {
+    try {
+      return await tryCobaltRequest(instanceUrl, url, outputPath);
+    } catch (e: any) {
+      console.warn(`[COBALT] Instance ${instanceUrl} gagal:`, e.message || e);
+      lastError = e;
+      continue; // Coba instance berikutnya jika yang ini gagal
+    }
+  }
+
+  throw new Error(
+    `Semua instansi Cobalt API (${allInstances.length} server) gagal memproses unduhan. Error terakhir: ${
+      lastError?.message || lastError || "Unknown"
+    }`
+  );
 }
 
 async function downloadUniversalVideo(
