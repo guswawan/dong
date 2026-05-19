@@ -55,9 +55,15 @@ async function getPublicCobaltInstances(): Promise<string[]> {
       return [];
     }
 
-    // Filter instance yang online.api === true dan urutkan berdasarkan score tertinggi
+    // Filter instance yang online.api === true, abaikan cobalt.tools yang mewajibkan JWT,
+    // dan urutkan berdasarkan score tertinggi
     const sorted = data
-      .filter((inst: any) => inst && inst.api && inst.online?.api === true)
+      .filter((inst: any) => 
+        inst && 
+        inst.api && 
+        inst.online?.api === true &&
+        !inst.api.includes("cobalt.tools")
+      )
       .sort((a: any, b: any) => {
         const scoreA = a.score || 0;
         const scoreB = b.score || 0;
@@ -145,17 +151,17 @@ async function downloadViaCobalt(
   // Ambil daftar instance dinamis
   const publicInstances = await getPublicCobaltInstances();
 
-  // Daftarkan juga beberapa fallback statis yang handal jika tracker offline
+  // Daftarkan juga beberapa fallback statis yang handal jika tracker offline (tanpa api.cobalt.tools karena mewajibkan JWT)
   const staticFallbacks = [
-    "https://api.cobalt.tools/",
     "https://cobalt.xyz/",
     "https://cobalt.unblocker.cc/",
     "https://co.wuk.sh/",
     "https://cobalt.sh/"
   ];
 
-  // Gabungkan dan bersihkan duplikat
-  const allInstances = Array.from(new Set([...publicInstances, ...staticFallbacks]));
+  // Gabungkan, bersihkan duplikat, dan pastikan tidak ada domain cobalt.tools
+  const allInstances = Array.from(new Set([...publicInstances, ...staticFallbacks]))
+    .filter((instanceUrl) => !instanceUrl.includes("cobalt.tools"));
 
   console.log(`[COBALT] Mulai memproses sekuensial pada ${allInstances.length} instance...`);
 
