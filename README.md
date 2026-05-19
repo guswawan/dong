@@ -11,7 +11,6 @@ Mengubah video menjadi ringkasan eksekutif, timeline pembahasan yang interaktif,
 - **Analisis AI Mendalam:** Menggunakan Google Gemini AI untuk mengekstrak inti sari video.
 - **Optimasi Video Panjang:** Menggunakan teknik **frame-rate compression** yang memungkinkan analisis video tanpa kehilangan konteks visual.
 - **Dukungan Multi-Sumber:** Upload file video atau gunakan link universal dari YouTube, X (Twitter), dan platform lainnya.
-- **Analisis Transkrip YouTube:** Optimasi otomatis untuk tautan YouTube dengan mengekstrak transkrip/subtitle secara langsung (atau melalui proxy Invidious) untuk analisis instan tanpa perlu mengunduh file video yang besar.
 - **Failover Robustness:** Sistem pool model yang otomatis tanpa membatalkan proses analisis.
 <!-- - **Limitasi & Validasi Video:** Proteksi durasi video (maksimal 20 menit) untuk pengunggahan via URL guna memastikan proses pengunduhan & kompresi berjalan optimal. -->
 - **Progressive UI:** Update status real-time dengan progress bar sehingga Anda tahu persis apa yang sedang dilakukan sistem.
