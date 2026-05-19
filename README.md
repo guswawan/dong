@@ -9,13 +9,14 @@ Mengubah video menjadi ringkasan eksekutif, timeline pembahasan yang interaktif,
 ## 🚀 Fitur Utama
 
 - **Analisis AI Mendalam:** Menggunakan Google Gemini AI untuk mengekstrak inti sari video.
-- **Optimasi Video Panjang:** Menggunakan teknik **frame-rate compression** yang memungkinkan analisis video 30+ menit dengan cepat tanpa kehilangan konteks visual.
-- **Dukungan Multi-Sumber:** Upload file video lokal atau gunakan link universal dari YouTube, X (Twitter), dan platform lainnya.
-- **Failover Robustness:** Sistem pool model cadangan (`GEMINI_FALLBACK_MODELS`) yang otomatis mendeteksi kegagalan API/quota limit pada model utama dan beralih ke model cadangan tanpa membatalkan proses analisis.
-- **Limitasi & Validasi Video:** Proteksi durasi video (maksimal 15 menit) untuk pengunggahan via URL guna memastikan proses pengunduhan & kompresi berjalan optimal.
+- **Optimasi Video Panjang:** Menggunakan teknik **frame-rate compression** yang memungkinkan analisis video tanpa kehilangan konteks visual.
+- **Dukungan Multi-Sumber:** Upload file video atau gunakan link universal dari YouTube, X (Twitter), dan platform lainnya.
+- **Analisis Transkrip YouTube:** Optimasi otomatis untuk tautan YouTube dengan mengekstrak transkrip/subtitle secara langsung (atau melalui proxy Invidious) untuk analisis instan tanpa perlu mengunduh file video yang besar.
+- **Failover Robustness:** Sistem pool model yang otomatis tanpa membatalkan proses analisis.
+<!-- - **Limitasi & Validasi Video:** Proteksi durasi video (maksimal 20 menit) untuk pengunggahan via URL guna memastikan proses pengunduhan & kompresi berjalan optimal. -->
 - **Progressive UI:** Update status real-time dengan progress bar sehingga Anda tahu persis apa yang sedang dilakukan sistem.
-- **Timeline Interaktif:** Klik pada timestamp untuk melompat ke bagian spesifik di pemutar video secara langsung menggunakan `ReactPlayer` untuk platform eksternal.
-- **Glosarium Otomatis:** Menjelaskan istilah teknis/slogan/bahasa sulit dengan analogi sederhana yang ramah awam.
+- **Timeline Interaktif:** Klik pada timestamp untuk melompat ke bagian spesifik.
+- **Glosarium Otomatis:** Menjelaskan istilah teknis/slogan/bahasa sulit dengan analogi sederhana yang ramah untuk orang awam.
 
 ---
 
@@ -23,8 +24,8 @@ Mengubah video menjadi ringkasan eksekutif, timeline pembahasan yang interaktif,
 
 - **Frontend & Backend:** [Next.js 15+](https://nextjs.org/) (App Router)
 - **AI Engine:** [Google Gemini API](https://ai.google.dev/)
-- **Video Processing:** [FFmpeg](https://ffmpeg.org/) (untuk optimasi frame rate)
-- **Downloader:** [yt-dlp](https://github.com/yt-dlp/yt-dlp) (untuk dukungan URL universal)
+- **Video Processing:** [FFmpeg](https://ffmpeg.org/)
+- **Downloader:** [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - **Linting & Formatting:** [Biome](https://biomejs.dev/)
 - **Runtime:** [Bun](https://bun.sh/)
 

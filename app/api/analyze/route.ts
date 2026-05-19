@@ -6,6 +6,7 @@ import { basename, join } from "path";
 import { promisify } from "util";
 
 import { ANALYSIS_PROMPT, SYSTEM_INSTRUCTION } from "./prompts";
+import { getYouTubeTranscript } from "./youtube-transcript";
 
 const execAsync = promisify(exec);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -214,7 +215,7 @@ async function downloadUniversalVideo(
     // Tambahkan --js-runtime node karena di Docker image runner sudah ada Node.js
     const bypassArgs = `--extractor-args "youtube:player_client=android,web" --force-ipv4 --js-runtime node`;
 
-    const command = `yt-dlp ${cookieFlag} ${proxyFlag} ${bypassArgs} --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 900" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`;
+    const command = `yt-dlp ${cookieFlag} ${proxyFlag} ${bypassArgs} --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 1200" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`;
     const { stdout, stderr } = await execAsync(command);
 
     if (
@@ -222,7 +223,7 @@ async function downloadUniversalVideo(
       stderr?.includes("does not pass filter")
     ) {
       throw new Error(
-        "Video terlalu panjang. Maksimal durasi adalah 15 menit.",
+        "Video terlalu panjang. Maksimal durasi adalah 20 menit.",
       );
     }
 
@@ -248,7 +249,7 @@ async function downloadUniversalVideo(
     // Jika error dilempar secara manual dari try block
     if (
       error.message ===
-        "Video terlalu panjang. Maksimal durasi adalah 15 menit." ||
+        "Video terlalu panjang. Maksimal durasi adalah 20 menit." ||
       error.message === "Gagal mengunduh video dari sumber tersebut."
     ) {
       throw error;
@@ -289,7 +290,7 @@ async function downloadUniversalVideo(
       allOutput.includes("does not pass filter")
     ) {
       throw new Error(
-        "Video terlalu panjang. Maksimal durasi adalah 15 menit.",
+        "Video terlalu panjang. Maksimal durasi adalah 20 menit.",
       );
     }
 
@@ -344,6 +345,9 @@ export async function POST(req: Request) {
       let tempFilePath = "";
       let compressedPath = "";
       let shouldKeepOriginal = false;
+      let transcriptText = "";
+      let hasTranscript = false;
+      let uploadResult: any = null;
 
       // Bersihkan file lama secara background
       cleanOldTempFiles().catch(console.error);
@@ -365,55 +369,72 @@ export async function POST(req: Request) {
           return;
         }
 
+        // Coba ambil transkrip terlebih dahulu jika berupa link YouTube
+        const videoId = urlInput ? extractYouTubeId(urlInput) : null;
+        if (urlInput && videoId) {
+          sendStatus("Mengekstrak transkrip dari YouTube...", 15);
+          try {
+            const activeInvidious = await getPublicInvidiousInstances();
+            transcriptText = await getYouTubeTranscript(videoId, activeInvidious);
+            if (transcriptText && transcriptText.length > 0) {
+              hasTranscript = true;
+            }
+          } catch (err: any) {
+            console.warn(`[TRANSCRIPT] Gagal mengambil transkrip YouTube: ${err.message || err}. Mencoba mengunduh video...`);
+          }
+        }
+
         let mimeType = "video/mp4";
 
-        if (file) {
-          sendStatus("Menyiapkan file video...", 10);
-          const bytes = await file.arrayBuffer();
-          const buffer = Buffer.from(bytes);
-          tempFilePath = join(os.tmpdir(), file.name);
-          await writeFile(tempFilePath, buffer);
-          mimeType = file.type;
+        if (!hasTranscript) {
+          if (file) {
+            sendStatus("Menyiapkan file video...", 10);
+            const bytes = await file.arrayBuffer();
+            const buffer = Buffer.from(bytes);
+            tempFilePath = join(os.tmpdir(), file.name);
+            await writeFile(tempFilePath, buffer);
+            mimeType = file.type;
 
-          sendStatus("Mengompresi video...", 25);
-          compressedPath = await compressVideo(tempFilePath);
-        } else if (urlInput) {
-          sendStatus("Mengunduh video dari sumber...", 15);
-          const downloaded = await downloadUniversalVideo(urlInput);
-          tempFilePath = downloaded.tempPath;
-          mimeType = downloaded.mimeType;
+            sendStatus("Mengompresi video...", 25);
+            compressedPath = await compressVideo(tempFilePath);
+          } else if (urlInput) {
+            sendStatus("Mengunduh video dari sumber...", 15);
+            const downloaded = await downloadUniversalVideo(urlInput);
+            tempFilePath = downloaded.tempPath;
+            mimeType = downloaded.mimeType;
 
-          sendStatus("Mengompresi video hasil unduhan...", 30);
-          compressedPath = await compressVideo(tempFilePath);
-          shouldKeepOriginal = true;
-        }
+            sendStatus("Mengompresi video hasil unduhan...", 30);
+            compressedPath = await compressVideo(tempFilePath);
+            shouldKeepOriginal = true;
+          }
 
-        sendStatus("Mengunggah video terkompresi...", 45);
-        const uploadResult = await ai.files.upload({
-          file: compressedPath,
-          config: {
-            mimeType: mimeType,
-          },
-        });
+          sendStatus("Mengunggah video terkompresi...", 45);
+          uploadResult = await ai.files.upload({
+            file: compressedPath,
+            config: {
+              mimeType: mimeType,
+            },
+          });
 
-        if (!uploadResult.name) {
-          throw new Error("Gagal mengunggah file video");
-        }
+          if (!uploadResult.name) {
+            throw new Error("Gagal mengunggah file video");
+          }
 
-        let fileState = await ai.files.get({ name: uploadResult.name });
-        let retryCount = 0;
-        while (fileState.state === "PROCESSING") {
-          retryCount++;
-          sendStatus(
-            `Sedang memproses video (tahap ${retryCount})...`,
-            50 + Math.min(retryCount * 2, 20),
-          );
-          await new Promise((resolve) => setTimeout(resolve, 5000));
-          fileState = await ai.files.get({ name: uploadResult.name });
-        }
+          let fileState = await ai.files.get({ name: uploadResult.name });
+          let retryCount = 0;
+          while (fileState.state === "PROCESSING") {
+            retryCount++;
+            sendStatus(
+              `Sedang memproses video (tahap ${retryCount})...`,
+              50 + Math.min(retryCount * 2, 20),
+            );
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            fileState = await ai.files.get({ name: uploadResult.name });
+          }
 
-        if (fileState.state === "FAILED") {
-          throw new Error("Gagal memproses file video ini.");
+          if (fileState.state === "FAILED") {
+            throw new Error("Gagal memproses file video ini.");
+          }
         }
 
         const mainModel = process.env.GEMINI_MODEL || "";
@@ -436,7 +457,28 @@ export async function POST(req: Request) {
               );
               await new Promise((resolve) => setTimeout(resolve, 1500));
             } else {
-              sendStatus("Sedang menganalisis video & menyusun materi...", 80);
+              if (hasTranscript) {
+                sendStatus("Sedang menganalisis materi dari transkrip...", 80);
+              } else {
+                sendStatus("Sedang menganalisis video & menyusun materi...", 80);
+              }
+            }
+
+            const parts: any[] = [];
+            if (hasTranscript) {
+              parts.push({
+                text: `${ANALYSIS_PROMPT}\n\nBerikut adalah transkrip teks dari video YouTube tersebut (lengkap dengan timestamp):\n\n${transcriptText}`,
+              });
+            } else {
+              parts.push({
+                fileData: {
+                  fileUri: uploadResult.uri,
+                  mimeType: uploadResult.mimeType,
+                },
+              });
+              parts.push({
+                text: ANALYSIS_PROMPT,
+              });
             }
 
             response = await ai.models.generateContent({
@@ -444,17 +486,7 @@ export async function POST(req: Request) {
               contents: [
                 {
                   role: "user",
-                  parts: [
-                    {
-                      fileData: {
-                        fileUri: uploadResult.uri,
-                        mimeType: uploadResult.mimeType,
-                      },
-                    },
-                    {
-                      text: ANALYSIS_PROMPT,
-                    },
-                  ],
+                  parts: parts,
                 },
               ],
               config: {
@@ -489,7 +521,9 @@ export async function POST(req: Request) {
           throw lastError || new Error("Gagal mendapatkan respon dari AI.");
         }
 
-        await ai.files.delete({ name: uploadResult.name });
+        if (uploadResult && uploadResult.name) {
+          await ai.files.delete({ name: uploadResult.name });
+        }
 
         let responseText = response.text || "{}";
         responseText = responseText
