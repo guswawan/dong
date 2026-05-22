@@ -4,14 +4,12 @@ import type { NextConfig } from "next";
 const projectRoot = path.resolve(__dirname);
 
 const nextConfig: NextConfig = {
+  // Standalone output for production
   output: "standalone",
-  // Prevent wrong monorepo root detection (breaks Docker / Cloud Build NFT tracing)
-  outputFileTracingRoot: projectRoot,
-  turbopack: {
-    root: projectRoot,
+  // Optimize for development performance
+  compiler: {
+    removeConsole: process.env.NODE_ENV === "production",
   },
-  // Keep heavy Node packages external — stable in CI and Cloud Run
-  serverExternalPackages: ["undici", "@google/genai"],
 };
 
 export default nextConfig;
