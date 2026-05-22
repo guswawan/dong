@@ -82,7 +82,7 @@ async function downloadUniversalVideo(
     // Tambahkan --js-runtime node karena di Docker image runner sudah ada Node.js
     const bypassArgs = `--extractor-args "youtube:player_client=android,web" --force-ipv4 --js-runtime node`;
 
-    const command = `yt-dlp ${cookieFlag} ${proxyFlag} ${bypassArgs} --playlist-items 1 --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 4200" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`;
+    const command = `yt-dlp ${cookieFlag} ${proxyFlag} ${bypassArgs} --playlist-items 1 --print "after_move:filepath" --no-warnings -f "worst" --max-filesize 500M --match-filter "duration <= 4200" -o "${outputPath}.%(ext)s" "${url}"`;
     const { stdout, stderr } = await execAsync(command);
 
     if (
