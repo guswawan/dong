@@ -1,10 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
 import { exec } from "child_process";
 import { readdir, stat, unlink, writeFile } from "fs/promises";
 import os from "os";
 import { basename, isAbsolute, join } from "path";
 import { promisify } from "util";
 
+import { getGeminiClient } from "./geminiClient";
 import { ANALYSIS_PROMPT, SYSTEM_INSTRUCTION } from "./prompts";
 import {
   getYoutubeUrlDuration,
@@ -14,8 +14,10 @@ import {
 } from "./youtubeTools";
 import { getYouTubeTranscript } from "./youtubeTranscript";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const execAsync = promisify(exec);
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function cleanOldTempFiles() {
   try {
@@ -543,6 +545,7 @@ export async function POST(req: Request) {
             `[POST] Mengunggah file terkompresi (${compressedPath}) ke Gemini API...`,
           );
           sendStatus("Mengunggah video terkompresi...", 45);
+          const ai = getGeminiClient();
           uploadResult = await ai.files.upload({
             file: compressedPath,
             config: {
@@ -642,7 +645,7 @@ export async function POST(req: Request) {
               });
             }
 
-            response = await ai.models.generateContent({
+            response = await getGeminiClient().models.generateContent({
               model: currentModel,
               contents: [
                 {
@@ -743,7 +746,7 @@ export async function POST(req: Request) {
           console.log(
             `[POST] Menghapus file video ${uploadResult.name} dari Gemini API storage...`,
           );
-          await ai.files.delete({ name: uploadResult.name });
+          await getGeminiClient().files.delete({ name: uploadResult.name });
           console.log(
             "[POST] Sukses menghapus file video dari Gemini API storage.",
           );
