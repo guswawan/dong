@@ -109,6 +109,9 @@ async function downloadUniversalVideo(
     return { tempPath: finalPath, mimeType: "video/mp4" };
   } catch (error: any) {
     console.error("yt-dlp error:", error);
+    console.error("yt-dlp stderr:", error.stderr);
+    console.error("yt-dlp stdout:", error.stdout);
+    console.error("yt-dlp stack:", error.stack);
 
     // Jika error dilempar secara manual dari try block
     if (
@@ -121,6 +124,7 @@ async function downloadUniversalVideo(
     const stderrStr = error.stderr || "";
     const stdoutStr = error.stdout || "";
     const allOutput = stderrStr + stdoutStr;
+    console.log("[YT-DLP] Full output:", allOutput);
 
     // Periksa apakah error karena durasi
     if (
@@ -144,8 +148,37 @@ async function downloadUniversalVideo(
       );
     }
 
+    // Cek apakah error karena YouTube bot detection
+    if (
+      allOutput.includes("sign in to confirm you're not a bot") ||
+      allOutput.includes("confirm you're not a bot") ||
+      allOutput.includes("cookies-from-browser") ||
+      allOutput.includes("http error 403") ||
+      allOutput.includes("unable to extract") ||
+      allOutput.includes("this content isn't available")
+    ) {
+      console.error("[YT-DLP] YouTube bot detection detected!");
+      throw new Error(
+        "YouTube memblokir server ini. Silakan gunakan video lain atau tunggu beberapa menit.",
+      );
+    }
+
+    // Error network/timeout
+    if (
+      allOutput.includes("timeout") ||
+      allOutput.includes("connection") ||
+      allOutput.includes("network") ||
+      error.code === "ETIMEDOUT" ||
+      error.code === "ENOTFOUND"
+    ) {
+      throw new Error(
+        "Koneksi ke video gagal. Pastikan server Anda memiliki akses internet.",
+      );
+    }
+
+    // Generic error dengan detail lebih lengkap
     throw new Error(
-      "Gagal mengunduh video. Pastikan URL valid, publik, dan dapat diakses.",
+      `Gagal mengunduh video: ${error.message || "Unknown error"}. Detail: ${allOutput.substring(0, 500)}`,
     );
   } finally {
     // Hapus file cookies jika ada
@@ -352,6 +385,12 @@ export async function POST(req: Request) {
           } catch (err: any) {
             console.error(
               `[POST] [TRANSCRIPT] Gagal mengambil transkrip YouTube: ${err.message || err}`,
+            );
+            console.error(
+              `[POST] [TRANSCRIPT] Error stack: ${err.stack}`,
+            );
+            console.error(
+              `[POST] [TRANSCRIPT] Error full object:`, err,
             );
 
             // YouTube without Transcript limits:
