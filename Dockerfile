@@ -1,19 +1,19 @@
 # Tahap 1: Pembangunan (Build)
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 WORKDIR /app
 
 # Salin package.json dan bun.lock untuk instalasi dependensi
 COPY package.json bun.lock* ./
 
 # Pasang Bun secara global dan install dependencies
-RUN npm install -g bun && bun install --frozen-lockfile
+RUN npm install -g bun && bun install
 
 # Salin source code dan jalankan build
 COPY . .
 RUN bun run build
 
 # Tahap 2: Runtime Server
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
