@@ -23,22 +23,15 @@ ENV HOSTNAME="0.0.0.0"
 # 1. Install System Dependencies: FFmpeg & Python3 (untuk yt-dlp)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    python3 \
+    python3-pip \
     curl \
     wget \
-    git \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Install yt-dlp via pip untuk mendapatkan versi terbaru
+# 2. Install yt-dlp via pip
 RUN python3 -m pip install --no-cache-dir yt-dlp
 
-# 3. Unduh dan install yt-dlp versi terbaru secara global (fallback)
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp
-
-# 2. Unduh dan install yt-dlp versi terbaru secara global
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp
+# 3. Salin hasil build Next.js Standalone
 
 # 3. Salin hasil build Next.js Standalone
 COPY --from=builder /app/public ./public
