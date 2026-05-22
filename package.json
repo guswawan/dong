@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo --port 3000",
+    "dev:webpack": "next dev --webpack --port 3000",
     "build": "next build",
     "start": "next start",
     "lint": "biome lint .",
     "format": "biome format --write .",
-    "check": "biome check --write ."
+    "check": "biome check --write .",
+    "clean": "rm -rf .next node_modules && bun install"
   },
   "dependencies": {
     "@google/genai": "^2.3.0",
