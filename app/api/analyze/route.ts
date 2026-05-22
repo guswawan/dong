@@ -191,12 +191,19 @@ async function downloadUniversalVideo(
 }
 
 async function getUrlDuration(url: string): Promise<number> {
+  // Reuse same cookie & proxy handling as downloadUniversalVideo to avoid bot detection
+  let hasCookies = false;
+  const cookiePath = join(os.tmpdir(), `cookies_${Date.now()}.txt`);
   try {
-    const proxyFlag = process.env.PROXY_URL
-      ? `--proxy "${process.env.PROXY_URL}"`
-      : "";
+    const youtubeCookies = process.env.YOUTUBE_COOKIES;
+    if (youtubeCookies) {
+      await writeFile(cookiePath, youtubeCookies);
+      hasCookies = true;
+    }
+    const cookieFlag = hasCookies ? `--cookies "${cookiePath}"` : "";
+    const proxyFlag = process.env.PROXY_URL ? `--proxy "${process.env.PROXY_URL}"` : "";
     const bypassArgs = `--extractor-args "youtube:player_client=android,web" --js-runtime node`;
-    const command = `yt-dlp ${proxyFlag} ${bypassArgs} --playlist-items 1 --print "duration" --no-warnings "${url}"`;
+    const command = `yt-dlp ${cookieFlag} ${proxyFlag} ${bypassArgs} --playlist-items 1 --print "duration" --no-warnings "${url}"`;
     const { stdout } = await execAsync(command);
     const duration = parseInt(stdout.trim(), 10);
     if (!Number.isNaN(duration)) {
@@ -206,6 +213,10 @@ async function getUrlDuration(url: string): Promise<number> {
   } catch (error) {
     console.warn("Gagal mengambil durasi via yt-dlp:", error);
     return 0;
+  } finally {
+    if (hasCookies) {
+      try { await unlink(cookiePath); } catch (_) {}
+    }
   }
 }
 
