@@ -5,19 +5,17 @@ type TranscriptConfig = Parameters<typeof fetchTranscript>[1];
 
 // Browser-like headers to bypass bot detection
 const BROWSER_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-  Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9",
-  "Accept-Encoding": "gzip, deflate, br",
-  DNT: "1",
-  Connection: "keep-alive",
-  "Upgrade-Insecure-Requests": "1",
-  "Sec-Fetch-Dest": "document",
-  "Sec-Fetch-Mode": "navigate",
-  "Sec-Fetch-Site": "none",
-  "Sec-Fetch-User": "?1",
-  "Cache-Control": "max-age=0",
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'DNT': '1',
+  'Connection': 'keep-alive',
+  'Upgrade-Insecure-Requests': '1',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Sec-Fetch-User': '?1',
+  'Cache-Control': 'max-age=0',
 };
 
 /**
@@ -26,44 +24,30 @@ const BROWSER_HEADERS = {
  */
 function decodeHtmlEntities(text: string): string {
   const entities: Record<string, string> = {
-    "&amp;": "&",
-    "&lt;": "<",
-    "&gt;": ">",
-    "&quot;": '"',
-    "&apos;": "'",
-    "&#39;": "'",
-    "&nbsp;": " ",
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&apos;': "'",
+    '&#39;': "'",
+    '&nbsp;': ' ',
   };
 
   // First pass: decode named entities
-  let decoded = text.replace(
-    /&(?:amp|lt|gt|quot|apos|nbsp|#39);/g,
-    (match) => entities[match] || match,
-  );
+  let decoded = text.replace(/&(?:amp|lt|gt|quot|apos|nbsp|#39);/g, (match) => entities[match] || match);
 
   // Second pass: decode numeric entities (decimal &#123; and hex &#x1A;)
-  decoded = decoded.replace(/&#(\d+);/g, (_, code) =>
-    String.fromCharCode(parseInt(code, 10)),
-  );
-  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, code) =>
-    String.fromCharCode(parseInt(code, 16)),
-  );
+  decoded = decoded.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
+  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
 
   // Handle double-encoded entities (e.g., &amp;gt; -> &gt; -> >)
   // Keep decoding until no more changes
-  let prev = "";
+  let prev = '';
   while (prev !== decoded) {
     prev = decoded;
-    decoded = decoded.replace(
-      /&(?:amp|lt|gt|quot|apos|nbsp|#39);/g,
-      (match) => entities[match] || match,
-    );
-    decoded = decoded.replace(/&#(\d+);/g, (_, code) =>
-      String.fromCharCode(parseInt(code, 10)),
-    );
-    decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, code) =>
-      String.fromCharCode(parseInt(code, 16)),
-    );
+    decoded = decoded.replace(/&(?:amp|lt|gt|quot|apos|nbsp|#39);/g, (match) => entities[match] || match);
+    decoded = decoded.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
+    decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
   }
 
   return decoded;
@@ -80,7 +64,7 @@ export function extractVideoId(url: string): string | null {
 
   for (const pattern of patterns) {
     const match = url.match(pattern);
-    if (match?.[1]) {
+    if (match && match[1]) {
       return match[1];
     }
   }
@@ -117,9 +101,7 @@ function createProxiedFetch(originalFetch: typeof fetch) {
 /**
  * Fetches transcript from a YouTube video URL or video ID
  */
-export async function fetchYoutubeTranscript(
-  videoUrlOrId: string,
-): Promise<string> {
+export async function fetchYoutubeTranscript(videoUrlOrId: string): Promise<string> {
   const videoId = extractVideoId(videoUrlOrId);
 
   if (!videoId) {
@@ -131,29 +113,22 @@ export async function fetchYoutubeTranscript(
       videoFetch: async ({ url, lang, userAgent }) => {
         const proxiedFetch = createProxiedFetch(fetch);
         const headers: Record<string, string> = {};
-        if (lang) headers["Accept-Language"] = lang;
-        if (userAgent) headers["User-Agent"] = userAgent;
+        if (lang) headers['Accept-Language'] = lang;
+        if (userAgent) headers['User-Agent'] = userAgent;
         return proxiedFetch(url, { headers });
       },
-      playerFetch: async ({
-        url,
-        method,
-        body,
-        headers: baseHeaders,
-        lang,
-        userAgent,
-      }) => {
+      playerFetch: async ({ url, method, body, headers: baseHeaders, lang, userAgent }) => {
         const proxiedFetch = createProxiedFetch(fetch);
         const headers: Record<string, string> = { ...baseHeaders };
-        if (lang) headers["Accept-Language"] = lang;
-        if (userAgent) headers["User-Agent"] = userAgent;
+        if (lang) headers['Accept-Language'] = lang;
+        if (userAgent) headers['User-Agent'] = userAgent;
         return proxiedFetch(url, { method, headers, body });
       },
       transcriptFetch: async ({ url, lang, userAgent }) => {
         const proxiedFetch = createProxiedFetch(fetch);
         const headers: Record<string, string> = {};
-        if (lang) headers["Accept-Language"] = lang;
-        if (userAgent) headers["User-Agent"] = userAgent;
+        if (lang) headers['Accept-Language'] = lang;
+        if (userAgent) headers['User-Agent'] = userAgent;
         return proxiedFetch(url, { headers });
       },
     };
@@ -161,19 +136,17 @@ export async function fetchYoutubeTranscript(
     const transcriptResult = await fetchTranscript(videoId, config);
 
     if (!transcriptResult || transcriptResult.length === 0) {
-      throw new Error(
-        "No transcript available for this video. The video may not have captions enabled.",
-      );
+      throw new Error('No transcript available for this video. The video may not have captions enabled.');
     }
 
     // Join all transcript segments into a single text, decoding HTML entities
     const transcriptText = transcriptResult
       .map((item) => decodeHtmlEntities(item.text))
-      .filter((text) => text && text !== "N/A")
-      .join(" ");
+      .filter((text) => text && text !== 'N/A')
+      .join(' ');
 
     if (!transcriptText.trim()) {
-      throw new Error("Transcript is empty or contains no valid content.");
+      throw new Error('Transcript is empty or contains no valid content.');
     }
 
     return transcriptText;
@@ -181,16 +154,16 @@ export async function fetchYoutubeTranscript(
     if (error instanceof Error) {
       throw new Error(`Failed to fetch transcript: ${error.message}`);
     }
-    throw new Error("Failed to fetch transcript: Unknown error");
+    throw new Error('Failed to fetch transcript: Unknown error');
   }
 }
 
 /**
  * Compatibility wrapper function used in app/api/analyze/route.ts
  */
-export async function getYouTubeTranscript(
-  videoId: string,
-  _activeInvidiousInstances: string[] = [],
-): Promise<string> {
-  return fetchYoutubeTranscript(videoId);
-}
+// export async function getYouTubeTranscript(
+//   videoId: string,
+//   _activeInvidiousInstances: string[] = [],
+// ): Promise<string> {
+//   return fetchYoutubeTranscript(videoId);
+// }

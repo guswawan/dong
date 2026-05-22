@@ -6,7 +6,7 @@ import { basename, isAbsolute, join } from "path";
 import { promisify } from "util";
 
 import { ANALYSIS_PROMPT, SYSTEM_INSTRUCTION } from "./prompts";
-import { getYouTubeTranscript } from "./youtubeTranscript";
+import { fetchYoutubeTranscript, extractVideoId } from "./youtubeTranscript";
 
 const execAsync = promisify(exec);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -42,11 +42,11 @@ async function compressVideo(inputPath: string): Promise<string> {
   }
 }
 
-function extractYouTubeId(url: string): string | null {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
-  return match && match[2].length === 11 ? match[2] : null;
-}
+// function extractYouTubeId(url: string): string | null {
+//   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+//   const match = url.match(regExp);
+//   return match && match[2].length === 11 ? match[2] : null;
+// }
 
 async function downloadUniversalVideo(
   url: string,
@@ -185,7 +185,7 @@ async function downloadUniversalVideo(
     if (hasCookies) {
       try {
         await unlink(cookiePath);
-      } catch (_e) {}
+      } catch (_e) { }
     }
   }
 }
@@ -215,7 +215,7 @@ async function getUrlDuration(url: string): Promise<number> {
     return 0;
   } finally {
     if (hasCookies) {
-      try { await unlink(cookiePath); } catch (_) {}
+      try { await unlink(cookiePath); } catch (_) { }
     }
   }
 }
@@ -356,7 +356,7 @@ export async function POST(req: Request) {
         }
 
         // Coba ambil transkrip terlebih dahulu jika berupa link YouTube
-        const videoId = urlInput ? extractYouTubeId(urlInput) : null;
+        const videoId = urlInput ? extractVideoId(urlInput) : null;
         const isYouTube = urlInput && videoId;
         console.log(
           `[POST] Identifikasi sumber: Apakah YouTube: ${!!isYouTube} (Video ID: ${videoId || "N/A"})`,
@@ -386,7 +386,7 @@ export async function POST(req: Request) {
             `[POST] Mencoba mengekstrak transkrip YouTube untuk Video ID: ${videoId}`,
           );
           try {
-            transcriptText = await getYouTubeTranscript(videoId);
+            transcriptText = await fetchYoutubeTranscript(videoId);
             if (transcriptText && transcriptText.length > 0) {
               hasTranscript = true;
               console.log(
@@ -878,7 +878,7 @@ export async function POST(req: Request) {
               `[POST] Clean up: Menghapus file temp mentah: ${tempFilePath}`,
             );
             await unlink(tempFilePath);
-          } catch (_e) {}
+          } catch (_e) { }
         }
         if (compressedPath) {
           try {
@@ -886,7 +886,7 @@ export async function POST(req: Request) {
               `[POST] Clean up: Menghapus file temp terkompresi: ${compressedPath}`,
             );
             await unlink(compressedPath);
-          } catch (_e) {}
+          } catch (_e) { }
         }
         console.log("[POST] Koneksi stream ditutup.");
         console.log("[POST] ===============================================\n");
