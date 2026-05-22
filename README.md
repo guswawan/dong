@@ -62,6 +62,16 @@ Sebelum menjalankan proyek ini, pastikan sudah menginstal:
     GEMINI_FALLBACK_MODELS=your_llm_model
     ```
 
+4.  **YouTube di Cloud Run (opsional untuk lokal, disarankan untuk production):**
+    YouTube sering memblokir IP datacenter (Google Cloud Run). Jika analisis URL YouTube gagal di production tetapi berhasil di lokal, set variabel berikut di Cloud Run:
+    ```env
+    # Isi dengan isi file cookies.txt format Netscape (bukan path file)
+    YOUTUBE_COOKIES=...
+    # Residential/rotating proxy, contoh: http://user:pass@host:port
+    YOUTUBE_PROXY=...
+    ```
+    Ekspor cookies dari browser yang sudah login YouTube menggunakan ekstensi seperti [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc).
+
 ---
 
 ## 🖥️ Menjalankan Proyek

@@ -8,8 +8,9 @@ COPY package.json bun.lock* ./
 # Pasang Bun secara global dan install dependencies
 RUN npm install -g bun && bun install --frozen-lockfile
 
-# Salin source code dan jalankan build
+# Salin source code dan jalankan build (webpack — stabil di Cloud Build vs turbopack)
 COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
 
 # Tahap 2: Runtime Server
