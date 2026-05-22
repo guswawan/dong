@@ -20,16 +20,15 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV HOSTNAME="0.0.0.0"
 
-# 1. Install System Dependencies: FFmpeg & Python3 (untuk yt-dlp)
+# 1. Install System Dependencies: FFmpeg (and tools for yt-dlp)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    python3-pip \
     curl \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Install yt-dlp via pip
-RUN python3 -m pip install --no-cache-dir yt-dlp
+RUN curl -L -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && chmod +x /usr/local/bin/yt-dlp
 
 # 3. Salin hasil build Next.js Standalone
 
