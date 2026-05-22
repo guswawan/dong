@@ -1,23 +1,13 @@
 import { fetchTranscript } from "youtube-transcript-plus";
 
+import {
+  createYoutubeFetch,
+  fetchYoutubeTranscriptViaYtDlp,
+  isYoutubeBotError,
+} from "./youtubeTools";
+
 // Type for transcript config (not exported from library)
 type TranscriptConfig = Parameters<typeof fetchTranscript>[1];
-
-// Browser-like headers to bypass bot detection
-const BROWSER_HEADERS = {
-  Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9",
-  "Accept-Encoding": "gzip, deflate, br",
-  DNT: "1",
-  Connection: "keep-alive",
-  "Upgrade-Insecure-Requests": "1",
-  "Sec-Fetch-Dest": "document",
-  "Sec-Fetch-Mode": "navigate",
-  "Sec-Fetch-Site": "none",
-  "Sec-Fetch-User": "?1",
-  "Cache-Control": "max-age=0",
-};
 
 /**
  * Decodes HTML entities in a string
@@ -42,10 +32,10 @@ function decodeHtmlEntities(text: string): string {
 
   // Second pass: decode numeric entities (decimal &#123; and hex &#x1A;)
   decoded = decoded.replace(/&#(\d+);/g, (_, code) =>
-    String.fromCharCode(parseInt(code, 10)),
+    String.fromCharCode(Number.parseInt(code, 10)),
   );
   decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, code) =>
-    String.fromCharCode(parseInt(code, 16)),
+    String.fromCharCode(Number.parseInt(code, 16)),
   );
 
   // Handle double-encoded entities (e.g., &amp;gt; -> &gt; -> >)
@@ -58,10 +48,10 @@ function decodeHtmlEntities(text: string): string {
       (match) => entities[match] || match,
     );
     decoded = decoded.replace(/&#(\d+);/g, (_, code) =>
-      String.fromCharCode(parseInt(code, 10)),
+      String.fromCharCode(Number.parseInt(code, 10)),
     );
     decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, code) =>
-      String.fromCharCode(parseInt(code, 16)),
+      String.fromCharCode(Number.parseInt(code, 16)),
     );
   }
 
@@ -93,27 +83,6 @@ export function extractVideoId(url: string): string | null {
 }
 
 /**
- * Creates a browser-like fetch function
- */
-function createProxiedFetch(originalFetch: typeof fetch) {
-  return async (url: string, init?: RequestInit) => {
-    const headers = new Headers(init?.headers || {});
-
-    // Add browser-like headers
-    Object.entries(BROWSER_HEADERS).forEach(([key, value]) => {
-      if (!headers.has(key)) {
-        headers.set(key, value);
-      }
-    });
-
-    return originalFetch(url, {
-      ...init,
-      headers,
-    });
-  };
-}
-
-/**
  * Fetches transcript from a YouTube video URL or video ID
  */
 export async function fetchYoutubeTranscript(
@@ -125,14 +94,15 @@ export async function fetchYoutubeTranscript(
     throw new Error(`Invalid YouTube URL or video ID: ${videoUrlOrId}`);
   }
 
+  const youtubeFetch = createYoutubeFetch();
+
   try {
     const config: TranscriptConfig = {
       videoFetch: async ({ url, lang, userAgent }) => {
-        const proxiedFetch = createProxiedFetch(fetch);
         const headers: Record<string, string> = {};
         if (lang) headers["Accept-Language"] = lang;
         if (userAgent) headers["User-Agent"] = userAgent;
-        return proxiedFetch(url, { headers });
+        return youtubeFetch(url, { headers });
       },
       playerFetch: async ({
         url,
@@ -142,18 +112,16 @@ export async function fetchYoutubeTranscript(
         lang,
         userAgent,
       }) => {
-        const proxiedFetch = createProxiedFetch(fetch);
         const headers: Record<string, string> = { ...baseHeaders };
         if (lang) headers["Accept-Language"] = lang;
         if (userAgent) headers["User-Agent"] = userAgent;
-        return proxiedFetch(url, { method, headers, body });
+        return youtubeFetch(url, { method, headers, body });
       },
       transcriptFetch: async ({ url, lang, userAgent }) => {
-        const proxiedFetch = createProxiedFetch(fetch);
         const headers: Record<string, string> = {};
         if (lang) headers["Accept-Language"] = lang;
         if (userAgent) headers["User-Agent"] = userAgent;
-        return proxiedFetch(url, { headers });
+        return youtubeFetch(url, { headers });
       },
     };
 
@@ -176,11 +144,34 @@ export async function fetchYoutubeTranscript(
     }
 
     return transcriptText;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to fetch transcript: ${error.message}`);
+  } catch (primaryError) {
+    const primaryMsg =
+      primaryError instanceof Error
+        ? primaryError.message
+        : String(primaryError);
+    console.warn(
+      `[TRANSCRIPT] youtube-transcript-plus gagal untuk ${videoId}: ${primaryMsg}. Mencoba fallback yt-dlp...`,
+    );
+
+    try {
+      const viaYtDlp = await fetchYoutubeTranscriptViaYtDlp(videoId);
+      console.log(
+        `[TRANSCRIPT] Fallback yt-dlp berhasil. Panjang: ${viaYtDlp.length} karakter.`,
+      );
+      return viaYtDlp;
+    } catch (fallbackError) {
+      const fallbackMsg =
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : String(fallbackError);
+      const combined = `${primaryMsg} | yt-dlp: ${fallbackMsg}`;
+      if (isYoutubeBotError(combined)) {
+        throw new Error(
+          `Failed to fetch transcript (YouTube blocked server IP): ${combined}`,
+        );
+      }
+      throw new Error(`Failed to fetch transcript: ${combined}`);
     }
-    throw new Error("Failed to fetch transcript: Unknown error");
   }
 }
 

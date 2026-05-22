@@ -6,6 +6,12 @@ import { basename, isAbsolute, join } from "path";
 import { promisify } from "util";
 
 import { ANALYSIS_PROMPT, SYSTEM_INSTRUCTION } from "./prompts";
+import {
+  getYoutubeUrlDuration,
+  isYoutubeBotError,
+  runYtDlpWithRetry,
+  YOUTUBE_CLOUD_RUN_HINT,
+} from "./youtubeTools";
 import { getYouTubeTranscript } from "./youtubeTranscript";
 
 const execAsync = promisify(exec);
@@ -57,33 +63,12 @@ async function downloadUniversalVideo(
 
   const fileBase = `vid_${Date.now()}`;
   const outputPath = join(os.tmpdir(), fileBase);
-  const cookiePath = join(os.tmpdir(), `cookies_${Date.now()}.txt`);
-  let hasCookies = false;
 
   try {
-    // Cek apakah ada cookies di environment variable untuk bypass bot detection YouTube
-    const youtubeCookies = process.env.YOUTUBE_COOKIES;
-    if (youtubeCookies) {
-      await writeFile(cookiePath, youtubeCookies);
-      hasCookies = true;
-    }
-
-    const cookieFlag = hasCookies ? `--cookies "${cookiePath}"` : "";
-
-    // Tambahkan opsi Proxy jika didefinisikan untuk menembus IP blocking Cloud Run
-    const youtubeProxy =
-      process.env.YOUTUBE_PROXY ||
-      process.env.PROXY_URL ||
-      process.env.HTTP_PROXY;
-    const proxyFlag = youtubeProxy ? `--proxy "${youtubeProxy}"` : "";
-
-    // Gunakan extractor-args untuk mencoba bypass bot detection dan force IPv4
-    // player_client=android,web seringkali lebih ampuh di cloud environment
-    // Tambahkan --js-runtime node karena di Docker image runner sudah ada Node.js
-    const bypassArgs = `--extractor-args "youtube:player_client=android,web" --force-ipv4 --js-runtime node`;
-
-    const command = `yt-dlp ${cookieFlag} ${proxyFlag} ${bypassArgs} --playlist-items 1 --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 4200" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`;
-    const { stdout, stderr } = await execAsync(command);
+    const { stdout, stderr } = await runYtDlpWithRetry(
+      (baseFlags) =>
+        `yt-dlp ${baseFlags} --print "after_move:filepath" --no-quiet --no-progress --no-simulate -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" --max-filesize 500M --match-filter "duration <= 4200" --merge-output-format mp4 -o "${outputPath}.%(ext)s" "${url}"`,
+    );
 
     if (
       stdout.includes("does not pass filter") ||
@@ -144,36 +129,18 @@ async function downloadUniversalVideo(
       );
     }
 
+    if (isYoutubeBotError(allOutput)) {
+      throw new Error(`YOUTUBE_BLOCKED: ${YOUTUBE_CLOUD_RUN_HINT}`);
+    }
+
     throw new Error(
       "Gagal mengunduh video. Pastikan URL valid, publik, dan dapat diakses.",
     );
-  } finally {
-    // Hapus file cookies jika ada
-    if (hasCookies) {
-      try {
-        await unlink(cookiePath);
-      } catch (_e) {}
-    }
   }
 }
 
 async function getUrlDuration(url: string): Promise<number> {
-  try {
-    const proxyFlag = process.env.PROXY_URL
-      ? `--proxy "${process.env.PROXY_URL}"`
-      : "";
-    const bypassArgs = `--extractor-args "youtube:player_client=android,web" --js-runtime node`;
-    const command = `yt-dlp ${proxyFlag} ${bypassArgs} --playlist-items 1 --print "duration" --no-warnings "${url}"`;
-    const { stdout } = await execAsync(command);
-    const duration = parseInt(stdout.trim(), 10);
-    if (!Number.isNaN(duration)) {
-      return duration;
-    }
-    return 0;
-  } catch (error) {
-    console.warn("Gagal mengambil durasi via yt-dlp:", error);
-    return 0;
-  }
+  return getYoutubeUrlDuration(url);
 }
 
 async function getVideoDuration(filePath: string): Promise<number> {
@@ -327,6 +294,17 @@ export async function POST(req: Request) {
           console.log(
             `[POST] Durasi video YouTube terdeteksi: ${durationSec} detik (${(durationSec / 60).toFixed(2)} menit)`,
           );
+
+          if (durationSec === 0) {
+            console.error(
+              "[POST] Gagal mengambil metadata YouTube (durasi 0) — kemungkinan IP Cloud Run diblokir.",
+            );
+            sendError(
+              `Tidak dapat mengakses video YouTube dari server. ${YOUTUBE_CLOUD_RUN_HINT}`,
+              false,
+            );
+            return;
+          }
 
           // Hard limit for YouTube is 240 minutes (14400 seconds)
           if (durationSec > 14400) {
