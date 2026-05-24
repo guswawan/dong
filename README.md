@@ -1,6 +1,6 @@
 # dǒng
 
-**dǒng** dibuat untuk membantu memahami materi workshop, webinar, TED Talks, atau video conference berdurasi panjang dalam hitungan menit. 
+**dǒng** dibuat untuk yang males nonton, jadi kesimpulannya apa. Membantu memahami materi workshop, webinar, TED Talks, atau video conference berdurasi panjang dalam hitungan menit. 
 
 Mengubah video menjadi ringkasan eksekutif, timeline pembahasan yang interaktif, dan glosarium istilah teknis yang mudah dipahami.
 
